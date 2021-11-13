@@ -1,0 +1,543 @@
+######################################################
+#                                                    #
+#  ANALISIS DE REGRESION LOGISTICA                   #
+#      Clodomiro Fernando Miranda Villagomez         #   
+#    cfmiranda@lamolina.edu.pe                        #
+#                                                    #
+######################################################
+
+
+#---------------------------------------------------------
+# Para limpiar el workspace, por si hubiera algun dataset 
+# o informacion cargada
+rm(list = ls())
+
+
+#---------------------------------------------------------
+#  Librerias
+library(MASS) 
+library(ROCR)
+library(pROC)
+library(ResourceSelection)
+library(pscl)
+
+###############################
+# CASO 1: EMPRESAS            #
+###############################
+
+# Preparacion de los datos
+# Lectura de datos Empresas1
+datosd <- read.delim("clipboard",T)
+head(datosd)
+View(datosd)
+str(datosd)
+
+attach(datosd)
+is.data.frame(datosd)
+
+datosd$exito   <- factor(datosd$exito,levels=c(0,1),
+                          labels=c("Fracaso","Exito"))#Referencia: Fracaso
+datosd$gradnove <- factor(datosd$gradnove,levels=c(1,2),
+                          labels=c("Mejoras_Sustanciales","Prod_nuevos"))
+datosd$tipo <- factor(datosd$tipo,levels=c(0,1),
+                          labels=c("Consumo_Industrial","Consumo_final"))
+datosd$imasd <- factor(datosd$imasd,levels=c(0,1),
+                          labels=c("No_dpto_investigacion",
+                                   "Si_dpto_investigacion"))
+datosd$sectecng <- factor(datosd$sectecng,levels=c(1,2,3),
+                          labels=c("Baja","Media","Alta"))
+
+str(datosd)
+head(datosd,8)
+View(datosd)
+
+
+# Para ver la categoria de referencia
+contrasts(datosd$exito)  
+contrasts(datosd$gradnove)
+
+contrasts(datosd$tipo)
+contrasts(datosd$imasd)
+contrasts(datosd$sectecng)
+?contrasts
+
+# Para cambiar la categoria de referencia.
+datosd$gradnove = relevel(datosd$gradnove,ref="Prod_nuevos") #RELEVEL permite cambiar la categoria de referencia
+datosd$sectecng = relevel(datosd$sectecng,ref="Alta")
+datosd$tipo = relevel(datosd$tipo,ref="Consumo_final")
+datosd$imasd = relevel(datosd$imasd,ref="Si_dpto_investigacion")
+
+# Para ver la categoria de referencia
+contrasts(datosd$exito)  
+contrasts(datosd$gradnove)
+
+contrasts(datosd$tipo)
+contrasts(datosd$imasd)
+contrasts(datosd$sectecng)
+
+# Modelo logistico
+head(datosd)
+summary(datosd)
+
+modelo <- glm(exito~., 
+               family=binomial,
+               data=datosd)
+
+summary(modelo)
+
+#Supuestos
+rstandard(modelo)
+library(lmtest)
+bptest(modelo)# hay homogeneidad de varianzas
+library(lmtest)
+dwtest(modelo,alternative = c("two.sided"))#Independencia de residuales
+
+#Contraste de significatividad global.
+# H0: Beta2=Beta3=...=Betak=0
+deviance_model=modelo$deviance
+modelo$deviance
+deviance_base=modelo$null.deviance
+modelo$null.deviance
+ji=deviance_base-deviance_model
+ji
+ji_gl=modelo$df.null-modelo$df.residual
+pvalor=pchisq(ji,df=ji_gl,lower.tail=FALSE)
+pvalor
+
+
+summary(modelo)
+summary(modelo)$coef
+coef(modelo)
+modelo$y
+str(modelo)
+
+#CALIBRACION DEL MODELO
+#PRUEBA DE HOSMER LEMESHOW
+
+library(ResourceSelection)
+hl <- hoslem.test(modelo$y, fitted(modelo),g=10)
+hl
+fitted(modelo)
+modelo$y
+cbind(hl$observed,hl$expected)
+
+library(vcdExtra)
+HL=HLtest(modelo,g=10)
+HL
+HL$table
+
+
+#---------------------------------------------------------
+# Cociente de ventajas (Odd Ratio)
+exp(coef(modelo))
+cbind(Coeficientes=modelo$coef,ExpB=exp(modelo$coef))
+
+#----------------------------------------------------------
+# Cociente de ventajas e IC 95% 
+library(MASS)
+exp(cbind(OR = coef(modelo),confint.default(modelo)))
+
+#----------------------------------------------------------
+
+#CONTRASTE PARA LOS COEFICIENTES INDIVIDUALES
+# Estadistico W de Wald
+library(survey)
+regTermTest(modelo,"publicid",method="Wald")
+regTermTest(modelo,"gradnove",method="Wald")
+regTermTest(modelo,"tipo",method="Wald")
+regTermTest(modelo,"imasd",method="Wald")
+regTermTest(modelo,"sectecng",method="Wald")
+regTermTest(modelo,"personal",method="Wald")
+
+
+#----------------------------------------------------------
+# Desvianza
+
+anova(modelo, test="Chisq")
+
+#EVALUANDO EL AJUSTE DEL MODELO
+# Pseudo R cuadrado
+library(pscl)
+pR2(modelo)
+
+#library(BaylorEdPsych)
+#PseudoR2(modelo)
+
+
+#----------------------------------------------------------
+# Importancia de las variables
+library(caret)
+import=varImp(modelo)
+
+orden=dplyr::arrange(import, desc(import))
+orden
+
+#----------------------------------------------------------
+#  Seleccion de Variables  
+library(MASS)
+step <- stepAIC(modelo,direction="backward", trace=FALSE)
+step$anova
+head(datosd)
+datosd=datosd[,-4]
+head(datosd)
+
+modelo1 <- glm(exito~., 
+               family=binomial,
+               data=datosd)
+
+#----------------------------------------------------------
+#  Probabilidades y grupos estimados  
+proba.pred=predict(modelo1,type="response")
+
+#Probabilidades estimadas de pertenecer a la clase 1 (no referencia)
+
+head(proba.pred,10)
+clase.pred <- ifelse(proba.pred >= 0.5, 1, 0)
+head(clase.pred,10)
+
+finaldata = cbind(proba.pred,clase.pred)
+head(finaldata,10)
+str(finaldata)
+finaldata1=as.data.frame(finaldata)
+str(finaldata1)
+
+library(tidyverse)
+finaldata2=finaldata1 %>% 
+  mutate(clase.pred=as.factor(clase.pred))
+head(finaldata2)
+str(finaldata2)
+
+library(tidyverse)
+ggplot(finaldata2, aes(x = proba.pred, fill = clase.pred)) + 
+  geom_histogram(alpha = 0.25)
+ggplot(finaldata2, aes(x = proba.pred, fill = clase.pred)) + 
+  geom_density(alpha = 0.25)
+
+write.csv(finaldata,"Compras-Logistica-Probabilidades.csv")
+
+#------------------------------------------------------------------
+# Prediccion para nuevos individuos
+# A continuacion se da el resultado de que una empresa tendra exito (1) con
+# la probabilidad de que esa empresa tenga exito
+
+nuevo1<-data.frame(publicid=1.2,gradnove="Prod_nuevos",
+                   imasd="Si_dpto_investigacion",sectecng="Alta",personal=1)
+predict(modelo1,newdata=nuevo1,type="response")# La empresa no tendra exito
+
+nuevo2<-data.frame(publicid=3,gradnove="Prod_nuevos",
+                   imasd="Si_dpto_investigacion",sectecng="Media",personal=4)
+predict(modelo1,newdata=nuevo2,type="response")# La empresa tendra exito
+
+############################################
+#  Indicadores para Evaluacion de Modelos  #
+############################################
+
+#############################
+# 1. Tabla de clasificacion #
+#############################
+
+Prediccion <-predict(modelo1, datosd, type="response")
+head(Prediccion)
+Pred=rep("Exito", length(Prediccion))
+Pred[Prediccion<0.5]= "Fracaso"
+Tabla_Conf=table(Pred,datosd$exito,dnn=c("Predicho","Observado"))
+Tabla_Conf
+
+library(gmodels)
+head(datosd)
+predict_fit=modelo1$fitted.values
+head(predict_fit)
+predict_fit[predict_fit>=0.50]=1
+predict_fit[predict_fit<0.50]=0
+CrossTable(predict_fit,datosd$exito,prop.chisq=FALSE,prop.c=FALSE,prop.r=FALSE)
+?CrossTable
+
+#  Probabilidades y grupos estimados  
+proba_pred=predict(modelo1,type="response")
+head(proba_pred) # Probabilidad de tener exito
+
+clase_pred <- ifelse(proba_pred >= 0.5, 1, 0)
+head(clase_pred)
+
+finaldata = cbind(proba_pred,clase_pred)
+head(finaldata)
+str(finaldata)
+
+library(gmodels)
+# Tabla de clasificacion
+
+CrossTable(x = clase_pred, y = exito,
+           prop.t=FALSE, prop.c=FALSE, prop.chisq = FALSE)
+
+addmargins(table(Real=datosd$exito,Clase_Predicha=clase_pred))
+prop.table(table(Real=datosd$exito,Clase_Predicha=clase_pred),1)
+
+# Calcular el accuracy. Es la probabilidad de que una empresa
+# sea bien clasificada.
+accuracy <- mean(exito==clase_pred) ; accuracy
+(52+81)/156
+#Calcular la tasa de mala clasificacion
+error <- mean(exito!=clase_pred) ; error
+1-accuracy
+
+#-----------------------------------
+# Usando la libreria caret
+library(caret)
+a=as.factor(clase_pred)
+head(a)
+b=as.factor(modelo1$y)
+head(b)
+confusionMatrix(a,b)
+52/(52+13)#Sensibilidad
+
+#####################################
+# 2. Curva ROC y Area bajo la curva #
+#####################################
+
+#Capacidad discriminante del modelo
+# Primera forma
+library(caTools)
+colAUC(proba_pred,exito,plotROC = TRUE)
+abline(0, 1,col="tomato",lty=4)
+
+# Segunda forma
+library(Epi)
+ROC(proba_pred,exito)
+library(Epi)
+ROC(data=datosd,form=exito~.)
+
+# CREAR BASE DE DATOS PARA ENTRENAMIENTO Y PARA PRUEBA.
+# Con la data de entrenamiento se hace el modelo y
+# con la data de prueba se mide la performance del modelo.
+# Para no ser juez y parte.
+
+str(datosd)	# Mostrar numero de observaciones, variables y datos.
+table(datosd$exito); prop.table(table(datosd$exito))
+#
+# Dividir la base de datos en datos: para el entrenamiento (E) y 
+# para la prueba (P)
+# Utilizando la funcion sample de la libreria base  para el Indice
+
+set.seed(5000)
+indice <- sample(2, nrow(datosd), replace = TRUE, prob = c(0.7, 0.3))
+Datos4_E <- datosd[indice == 1,]  #data de entrenamiento (70%)
+Datos4_P <- datosd[indice == 2,]  #data de prueba (30%)
+prop.table(table(datosd$exito))
+table(Datos4_E$exito); prop.table(table(Datos4_E$exito))
+table(Datos4_P$exito); prop.table(table(Datos4_P$exito))
+dim(Datos4_E)[1]/dim(datosd)[1]
+dim(Datos4_P)[1]/dim(datosd)[1]
+nrow(Datos4_E)/156 # Aproximadamente 70%
+nrow(Datos4_P)/156 # Aproximadamente 30%
+
+# De otra manera: Usando la funcion createDataPartition de la
+# libreria caret para el indice
+
+library(caret)
+head(datosd)
+set.seed(5000)
+ind_train=createDataPartition(y=datosd$exito,p=0.7,list=FALSE)
+base_entrenamiento=datosd[ind_train,]
+dim(base_entrenamiento)
+base_prueba=datosd[-ind_train,]
+dim(base_prueba)
+dim(datosd)[1]
+dim(base_entrenamiento)[1]/dim(datosd)[1]
+dim(base_prueba)[1]/dim(datosd)[1]
+
+prop.table(table(datosd$exito))
+prop.table(table(base_entrenamiento$exito))
+prop.table(table(base_prueba$exito))
+
+# TRABAJANDO CON LOS RESULTADOS DE LA FUNCION sample
+# Regresion logistica binaria con la data de entrenamiento
+#
+# Estimacion de los coeficientes de regresion
+head(Datos4_E)
+Modelo4<-glm(exito~.,data=Datos4_E, family=binomial(link=logit))
+summary(Modelo4)
+exp(coef(Modelo4))
+#
+
+#  Prediccion para nuevas empresas  
+
+nuevo1<-data.frame(publicid=1.2,gradnove="Prod_nuevos",
+                   imasd="Si_dpto_investigacion",sectecng="Alta",personal=1)
+predict(Modelo4,newdata=nuevo1,type="response")# La empresa no tendra exito
+
+nuevo2<-data.frame(publicid=3,gradnove="Prod_nuevos",
+                   imasd="Si_dpto_investigacion",sectecng="Media",personal=4)
+predict(Modelo4,newdata=nuevo2,type="response")# La empresa no tendra exito
+
+#  Prediccion para nuevas empresas 
+#Xo=c(1,4.5,1,0,1,1,0,15); P_Xo=sum(Xo*coef(Modelo4)); P1=1/(1+exp(-(P_Xo))); P1
+#Xo=c(1,1.5,0,0,0,0,1,10); P_Xo=sum(Xo*coef(Modelo4)); P2=1/(1+exp(-(P_Xo))); P2
+#Xo=c(1,8.5,0,1,1,0,0,20); P_Xo=sum(Xo*coef(Modelo4)); P3=1/(1+exp(-(P_Xo))); P3
+
+# Utilizando la data de prueba para validar el modelo (Modelo4)
+
+# Tabla de confusion con los datos de prueba
+
+Prediccion1 <-predict(Modelo4, Datos4_P, type="response")
+head(Prediccion1)
+Pred1=rep("Exito", length(Prediccion1))
+Pred1[Prediccion1<0.5]= "Fracaso"
+Tabla_Conf1=table(Pred1,Datos4_P$exito,dnn=c("Predicho","Observado"))
+Tabla_Conf1
+# 
+
+############################################
+#  Indicadores para Evaluacion de Modelos  #
+############################################
+
+#############################
+# 1. Tabla de clasificacion #
+#############################
+
+library(gmodels)
+head(Datos4_P)
+
+
+#  Probabilidades y grupos estimados  
+proba_pred=predict(Modelo4,type="response")
+head(proba_pred) # Probabilidad de tener exito
+
+library(gmodels)
+# Tabla de clasificacion
+
+CrossTable(x = Pred1, y =Datos4_P$exito ,dnn=c("Predicho","Observado"),
+           prop.t=FALSE, prop.c=FALSE, prop.chisq = FALSE)
+
+addmargins(table(Pred1,Real=Datos4_P$exito,dnn=c("Predicho","Observado")))
+prop.table(table(Pred1,Real=Datos4_P$exito,dnn=c("Predicho","Observado")),1)
+
+# Calcular el accuracy. Es la probabilidad de que una empresa
+# sea bien clasificada.
+head(Datos4_P)
+attach(Datos4_P)
+accuracy <- mean(Datos4_P$exito==Pred1) ; accuracy
+(14+23)/44
+#Calcular el error de mala clasificacion
+error <- mean(Datos4_P$exito!=Pred1) ; error
+1-accuracy
+
+#-----------------------------------
+# Usando la libreria caret
+clase_pred1 <- Pred1
+head(clase_pred1)
+library(caret)
+is.factor(clase_pred1)
+a=as.factor(clase_pred1)
+head(a)
+b=as.factor(Datos4_P$exito)
+head(b)
+confusionMatrix(a,b)
+contrasts(Datos4_P$exito)  
+14/(14+3)#Sensibilidad
+
+bin_cm=ConfusionTableR::binary_class_cm(a,b)
+bin_cm$record_level_cm
+library(dplyr)
+glimpse(bin_cm$record_level_cm)
+ConfusionTableR::binary_visualiseR(train_labels = a,
+                truth_labels = b,
+                class_label1 = "Fracaso",
+                class_label2 = "Exito",
+                quadrant_col1 = "#28ACB4",
+                quadrant_col2 = "#4397D2",
+                custom_title = "Matriz de Confusion-Empresas",
+                text_col = "black",
+                cm_stat_size = 1.2)
+
+#####################################
+# 2. Curva ROC y Area bajo la curva #
+#####################################
+
+#Capacidad discriminante del modelo
+# Primera forma
+library(caTools)
+colAUC(Prediccion1,Datos4_P$exito,plotROC = TRUE)
+abline(0, 1,col="red",lty=3)
+
+
+# Segunda forma
+library(Epi)
+ROC(Prediccion1,Datos4_P$exito)
+
+?ROC
+head(Datos4_P)
+#  Metricas para medir la precision de un clasificador
+
+Tabla_Conf1
+
+VP=Tabla_Conf1[2,1]; FP=Tabla_Conf1[2,2]; FN=Tabla_Conf1[1,1];
+VN=Tabla_Conf1[1,2]; N=VP+FN+FP+VN
+
+Accuracy=((VP+VN)/N)*100; Accuracy
+Sensibilidad=(VP/(VP+FN))*100; Sensibilidad; 
+Especificidad=(VN/(FP+VN))*100; Especificidad
+VP_Positivo=(VP/(VP+FP))*100; VP_Positivo
+VP_Negativo=(VN/(FN+VN))*100; VP_Negativo
+# TFP=(FP/(FP+VN))*100; TFP; TFN=(FN/(VP+FN))*100; TFN
+
+# MISCELANEA
+
+# Pesos de evidencia (WOE=Weights Of Evidence)
+# Importancia de las variables
+# IV= Information Value
+# El IV es una medida de la entropia muy popular en la construccion de
+# Scorecards Con ese estadistico se puede medir el poder de prediccion 
+# de agrupar los atributos de una variable. Ademas, es un buen indicador
+# a la hora de seleccionar variables para un modelo de regresion logistico
+# binario, como es el caso de un modelo de scoring.
+# Criterios respecto al IV (Brotherton, 2013)
+
+##########################################################################
+#         IV                               Valor predictivo.             #
+# Menor a 0.02                       La variable no es predictiva        #
+# Entre 0.02 y 0.1                  La variable es debilmente predictiva #
+# Entre 0.1 y 0.3                   La variable es predictiva  media     #
+# mas de 0.3                         La variable es fuertemente predictiva#
+##########################################################################
+
+# No se tendra en cuenta en el modelo a las variables con IV<0.02 o con
+# IV>0.5 por ser una variable sobrepredictiva.
+
+library(klaR)
+head(Datos4_E)
+woemodel <- woe(exito~., data = Datos4_E, zeroadj=0.5, applyontrain = TRUE)
+str(woemodel)
+
+#Valores de los valores de informacion para cada variable categorica
+woemodel$ IV 
+
+## plot variable information values and woes
+plot(woemodel)
+plot(woemodel, type = "woes")
+woemodel$woe$sectecng
+woemodel$xnew$woe_sectecng
+
+## apply woes 
+traindata <- predict(woemodel, Datos4_E, replace = TRUE)
+str(traindata)
+
+## fit logistic regression model
+glmodel     <- glm(exito~., traindata, family=binomial)
+summary(glmodel)
+pred.trn <- predict(glmodel, traindata, type = "response")
+pred.trn
+
+## predict validation data
+validata <- predict(woemodel,Datos4_E , replace = TRUE)
+pred.val <- predict(glmodel, validata, type = "response")
+pred.val
+
+
+
+
+
+
+
+
+
+
