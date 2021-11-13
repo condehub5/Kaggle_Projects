@@ -1,5 +1,5 @@
 ---
-title: 'Tarea 5 - REGRESIÓN APLICADA'
+title: 'Projecto de Predicción de Venta de Casas en Condado King'
 author: "Jorge Condeña"
 professor: "Carlos"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
@@ -8,11 +8,6 @@ output:
   code_folding: hide
   word_document: default
   pdf_document: default
-header-includes:
-  - \usepackage{titling}
-  - \pretitle{\begin{center}
-    \includegraphics[width=5in,height=5in]{shield.png}\LARGE\\}
-  - \posttitle{\end{center}}
 ---
 
 ```{r setup, include=FALSE}
@@ -90,7 +85,7 @@ Los estadísticos se presentan en la tabla 1. Describiendo algunos estadísticos
 
 
 ```{r, echo = FALSE, warning=FALSE, fig.cap= 'Histograma general', fig.align='center', fig.width= 8, fig.height=8}
-df <- read.csv("C://Users/PREDATOR/Documents/MAESTRIA ESTADISTICA-UNALM/CICLO 2021-II/REGRESION APLICADA/SESION 2/TAREA 2/kc_house_data.csv")
+df <- read.csv("data/kc_house_data.csv")
 #glimpse(df)
 #freq(df$id)
 df_plot <- df %>% select(price,bedrooms, bathrooms, sqft_living,
