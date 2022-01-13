@@ -1,0 +1,1285 @@
+---
+title: 'Proyecto de Predicción de Venta de Casas en Condado King'
+author: "Jorge Condeña"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+  code_folding: hide
+  word_document: default
+  pdf_document: default
+always_allow_html: true
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, error = TRUE, fig.align ="center", message =FALSE, warning = FALSE )
+```
+
+```{r, include=FALSE}
+library("stargazer")
+library("plotly")
+library("kableExtra")
+library("bookdown")
+library("tidyverse")
+library("funModeling")
+library("Hmisc")
+library("car")
+library(ggplot2)
+library(GGally)
+library(ggplot2)
+library(hydroGOF)
+library(mvtnorm)
+library(alr4)    #libreria para comprobar linealidad
+library(nortest) #libreria para comprobar normalidad 
+library(moments) #libreria para obtener momentos
+library(lmtest)  #librería para probar autocorrelación
+library(DT)
+library(glmnet)
+library(caret)
+```
+
+## Presentación de la base de datos
+
+El conjunto de datos se recogió desde la web del repositorio de [Kaggle](https://www.kaggle.com/), un sitio web donde se almacenan datos y se desarrollan proyectos y competiciones enfocadas a la ciencia de datos, así como en la colaboración y enseñanza de código.
+
+## Una vista a los datos
+
+Los datos recopilan el precio de las casas en el condado de King County, USA, desde el periodo de Mayo de 2014 hasta Mayo de 2015.
+
+**Variables relevantes:**
+
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | Variable      | Descripción                                                                                                                                                                                                                                                                                                |
++===+===============+============================================================================================================================================================================================================================================================================================================+
+|   | id            | Un único ID para cada casa vendida                                                                                                                                                                                                                                                                         |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | date          | Fecha de la venta de la casa                                                                                                                                                                                                                                                                               |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | price         | Precio de cada casa vendida                                                                                                                                                                                                                                                                                |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | grade         | Un índice de 1 a 13, dónde 1-3 significa que la casa no tiene un buen nivel de construcción y diseño; 4-6, tiene un mejor nivel, pero menos que el promedio; 7, un nivel promedio de construcción y diseño, 8-10, tiene un buen nivel y 11-13 que la casa tiene una gran calidad de diseño y construcción. |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | view          | Índice de 0 al 4 de cuán buena es la vista desde el condominio                                                                                                                                                                                                                                             |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | condition     | Índice de 1 al 5 que resume la condición del departamento                                                                                                                                                                                                                                                  |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | lat           | Latitud                                                                                                                                                                                                                                                                                                    |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | long          | Longitud                                                                                                                                                                                                                                                                                                   |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | sfqt_living15 | Los pies cuadrados de espacio interior habitable para los 15 vecinos más cercanos                                                                                                                                                                                                                          |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | sqft_lot15    | Los pies cuadrados de los lotes de tierra para los 15 vecinos más cercanos                                                                                                                                                                                                                                 |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | waterfront    | Variable dummy que indica si el inmueble tiene vista al paseo marítimo                                                                                                                                                                                                                                     |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | floors        | Número de pisos                                                                                                                                                                                                                                                                                            |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | bedrooms      | Número de cuartos en el inmueble                                                                                                                                                                                                                                                                           |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | bathrooms     | Número de baños en el inmueble                                                                                                                                                                                                                                                                             |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | sqft_living   | Pies cuadrados del espacio habitable interior del apartamento                                                                                                                                                                                                                                              |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | Sqft_lot      | Pies cuadrados del espacio terrestre del inmueble                                                                                                                                                                                                                                                          |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | sqft_above    | Los pies cuadrados del espacio interior de la vivienda que está por encima del nivel del suelo                                                                                                                                                                                                             |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | Sqft_basement | Los pies cuadrados del espacio interior de la vivienda que está por debajo del nivel del suelo                                                                                                                                                                                                             |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | zipcode       | Área de código postal en el que se encuentra la casa                                                                                                                                                                                                                                                       |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | yr_built      | El año en el que la casa fue construida                                                                                                                                                                                                                                                                    |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|   | yr_renovated  | El año en el que la casa fue renovada por última vez                                                                                                                                                                                                                                                       |
++---+---------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+------------------------------------------------------------------------
+
+<br>
+
+```{r mylatextable, results = "asis", echo=FALSE, include=FALSE}
+#library(stargazer)
+#stargazer(df,
+#           digits = 2,
+#           #note you have to specify type
+#           type = "html",
+           #note that the argument is "out" not "file"
+#           out = "star_descriptive.doc")
+```
+
+```{r, echo = FALSE, warning=FALSE}
+df <- read.csv("data/kc_house_data.csv")
+datatable(head(df, 30), callback = JS('table.page("next").draw(false);'))
+```
+
+## Características de los datos: histogramas, estadísticos y correlaciones
+
+### Estadísticos:
+
+Los estadísticos se presentan en la tabla 1.
+Describiendo algunos estadísticos de variables importantes, en el caso de la variable respuesta, el precio, la media de este fue 540,088 dólares con una desviación de 367,127.
+Si nos fijamos en algunas características importantes en la compra de un inmueble, como el número de cuartos y baños, los primeros tenian un promedio de 3.34 \~ 3 cuartos por inmueble, mientras que en el caso de los baños se contó con una media de 2.11 \~ 2 baños por inmueble.
+
+```{r, echo = FALSE, warning=FALSE, fig.cap= 'Histograma general', fig.align='center', fig.width= 8, fig.height=8}
+df_plot <- df %>% select(price,bedrooms, bathrooms, sqft_living,
+                         sqft_lot, floors, waterfront, view, condition,
+                         grade, lat, long)
+plot_num(df_plot, bins = 15, path_out = ".")
+```
+
+```{r, fig.cap= 'Gráfico de cajas para algunas variables cuantitativas discretas y categóricas',fig.align='center', fig.width= 8, fig.height=8}
+df_plot_categorical <- df %>% select(bedrooms, bathrooms, floors, waterfront, view,                                             condition, grade)
+boxplot(df_plot_categorical)
+```
+
+## Inspeccionamos relación entre algunas variables
+
+### Relación entre variables price, bedrooms, bathrooms, sqft_living and sqft lot
+
+```{r, fig.align='center', fig.cap= "Diagrama de pares price, bedrooms, bathrooms, sqft_living y sqft_lot", echo=FALSE, message=FALSE, warning=FALSE, }
+
+plot1<-ggpairs(data=df, columns=3:7,
+    mapping = aes(color = "qsec"),
+    axisLabels="show")
+plot1
+```
+
+### Relación entre variables price, floors, waterfront, view, condition y grade
+
+```{r, fig.align='center', fig.cap= "Diagrama de pares price, floors, waterfront, view, condition y grade", echo=FALSE, message=FALSE, warning=FALSE}
+library(GGally)
+library(ggplot2)
+library(hydroGOF)
+library(mvtnorm)
+plot2<-ggpairs(data=df, columns=c(3,8:12),
+    mapping = aes(color = "dark green"),
+    axisLabels="show")
+plot2
+```
+
+### Relación entre variables price, yr built, lat y long
+
+```{r, fig.align='center', fig.cap= "Diagrama de pares price, yr built, lat y long", echo=FALSE, message=FALSE, warning=FALSE}
+plot3=ggpairs(data=df, columns=c(3,15,18,19),
+    mapping = aes(color = "dark green"),
+    axisLabels="show")
+plot3
+```
+
+### Notamos un grado de correlación importante entre sqft_living y price ya que cuando uno aumenta, el otro también.
+
+```{r, fig.align='center', fig.cap= "Diagrama de cajas entre sfqt_living y price", echo=FALSE, message=FALSE, warning=FALSE}
+boxplot1=boxplot(price~sqft_living, data=df, 
+  col=(c("black")),
+  main="Price vs. Sqft_living", xlab="Sqft_living", ylab="Price")
+```
+
+### Notamos otra relación importante entre price vs. bathrooms
+
+```{r, fig.align='center', fig.cap= "Diagrama de cajas entre bathrooms y price", echo=FALSE, message=FALSE, warning=FALSE}
+boxplot2=boxplot(price~bathrooms, data=df, 
+  col=(c("gold")),
+  main="Price vs. Bathrooms", xlab="Bathrooms", ylab="Price")
+```
+
+### Entre price vs. grade
+
+```{r, fig.align='center', fig.cap= "Diagrama de cajas entre price y grade", echo=FALSE, message=FALSE, warning=FALSE}
+boxplot3=boxplot(price~grade, data=df, 
+  col=(c("darkgreen")),
+  main="Price vs. Grade", xlab="Grade", ylab="Price")
+```
+
+### Entre price vs. View
+
+```{r, fig.align='center', fig.cap= "Diagrama de cajas entre price y view", echo=FALSE, message=FALSE, warning=FALSE}
+boxplot4=boxplot(price~view, data=df, 
+  col=(c("skyblue")),
+  main="Price vs. View", xlab="View", ylab="Price")
+```
+
+\#\#\#Se nota una relación interesante entre price y lat, ya que se asemeja mucho a una distribución normal, con muchos datos en el centro de la distribución,aunque con un ligera simetría negativa.
+
+```{r, fig.align='center', fig.cap= "Diagrama de cajas entre price y lat", echo=FALSE, message=FALSE, warning=FALSE}
+boxplot5=boxplot(price~lat, data=df, 
+  col=(c("gold","darkgreen")),
+  main="Price vs. Lat", xlab="Lat", ylab="Price")
+```
+
+### Entre price y long hay una distribución con un clara simetría positiva
+
+```{r, fig.align='center', fig.cap= "Diagrama de cajas entre price y long", echo=FALSE, message=FALSE, warning=FALSE}
+boxplot6=boxplot(price~long, data=df, 
+  col=(c("gold","darkgreen")),
+  main="Price vs. Long", xlab="Long", ylab="Price")
+```
+
+### Correlaciones:
+
+Realizamos el cálculo de la correlación entre variables y el gráfico de correlación entre algunas de ellas, las cuales son importantes para la descripción de la base de datos.
+Observamos un grado de relación directa significativo entre las variables predictoras en el gráfico (en este caso, número de baños, número de cuartos, pies cuadrados del espacio interior habitable, pies cuadrados del espacio del terreno y el número de pisos) y la variable respuesta que es el precio.
+
+```{r, warning=FALSE, fig.cap= "Correlación", echo=FALSE, message=FALSE}
+library(dplyr)
+df_dat <- df %>% select(price,bedrooms, bathrooms, sqft_living,
+                         sqft_lot, floors, waterfront, view, condition,
+                         grade, lat, long)
+cor(df_dat)
+```
+
+```{r, fig.align='center', fig.cap="Gráfico de correlación", echo = FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.width= 8, fig.height=8}
+# Matriz de dispersión con correlaciones
+df_dat2 <- df %>% select(price, bedrooms, bathrooms, sqft_living,
+                         sqft_lot, floors)
+#gráfico de correlación
+library(psych)
+pairs.panels(df_dat2, stars = TRUE, lm = TRUE, ellipses = FALSE)
+```
+
+## ANÁLISIS DE REGRESIÓN MÚLTIPLE
+
+### Modelo 1
+
+El modelo de regresión lineal múltiple incluirá a las siguientes variables:
+
+```{r, echo = TRUE, warning=FALSE, message=FALSE}
+#Regresionamos con todas las variables predictoras
+#excepto solo las variables de fecha e ID, ya 
+#que no son variables cuantitativas y afectarían 
+#los resultados del modelo de regresión en caso de incluirlas
+model1 <- lm(price ~ . -date -id, data = df)
+summary(model1)
+vif(model1)
+alias(lm(price ~ . -date -id, data = df) )
+```
+
+Vemos si hay mlticolinealidad en las variables.
+El programa nos indica que hay coeficientes que no se pueden estimar debido a un alto grado de multicolinealidad entre esas variables.
+Identificamos que hay una alta correlación de la variable `sqft_basement`con las variables `sqft_living` y `sqft_above`.
+
+```{r}
+vif(model1)
+alias(lm(price ~ . -date -id, data = df) )
+```
+
+```{r}
+plot(x=predict(model1), y= df$price,
+     xlab='Predicted Values',
+     ylab='Actual Values',
+     main='Predicted vs. Actual Values')
+abline(a=0, b=1)
+```
+
+```{r}
+datamodel1 <- data.frame(actual = df$price, predicted = predict(model1))
+head(datamodel1)
+```
+
+```{r}
+ggplot(df, aes(x=predict(model1), y= price)) +
+  geom_point() +
+  geom_abline(intercept=0, slope=1) +
+  labs(x='Predicted Values', y='Actual Values', title='Predicted vs. Actual Values')
+```
+
+Obtenemos los coeficientes estimados:
+
+```{r, coeficientes}
+model1$coefficients
+```
+
+Y si queremos una vista más amplia incluyendo a los coeficientes, errores estándar, el t-values y p-values:
+
+```{r}
+summary(model1)$coefficients
+```
+
+Vemos que obtenemos un resultado NA en la variable `sqft_basements`, ya que en el resultado de la regresión se obtiene que no está definido en razón de que está altamente correlacionado e incluso es perfectamente colineal con otra variable, por lo cual no figura en el cálculo de la regresión, por ello es conveniente excluirla para la refinación del modelo.
+
+Podemos extraer el coeficiente de determinación del modelo anterior, el cual nos da 0.6997 o, en términos porcentuales, 69.97%, lo cual nos indica que el modelo tiene una bondad de ajuste cercana al 70%.
+Es decir, las variables predictoras son responsables del 69.97% de la variación de la variable respuesta, en este caso el precio.
+
+```{r squared, warning = FALSE, message=FALSE, include=TRUE}
+result <- summary(model1)
+result$r.squared
+```
+
+#### Análisis de residuales del modelo 1
+
+Vamos al análisis de los residuos del modelo.
+Encontramos que estos no siguen una distribución normal.
+Inspeccionado los residuos versus los valores predichos, vemos una clara aglomeración en el centro y un conjunto de valores predichos que se alejan de la línea de residuos=0 conforme los valores predichos crecen, lo cual no sigue un patrón aleatorio en cómo están ubicados los residuos.
+En el caso del gráfico QQ-plot, estos tampoco siguen la línea recta, con un conjunto de residuos saliéndose de dicha linea.
+
+En el gráfico de *scale- location* no se ve una línea horizontal a lo largo del gráfico, notándose que la variabilidad crece conforme los valores ajustados crecen.
+En el caso del gráfico *Residuals vs. Leverage* se observa que hay valores extremos que afectan al modelo ya que muchos de ellos pasan incluso de las 10 desviaciones estándar.
+
+```{r residmodel1, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Gráficos residuales para el modelo 1.', echo=FALSE, warning=FALSE}
+# Residual diagnostics for Model 1
+par(mfrow=c(2,2))
+plot(model1, las=1, col='deepskyblue4', which=1:4)
+par(mfrow=c(1,1))
+```
+
+Testeamos el grado de simetría y curtosis de los residuos así como realizamos el test de Anderson-Darling.
+Obtenemos que la curtosis excede en demasía el valor de 3 asi como se aleja del grado de simetría que se quiere en una distribución normal.
+Asimismo, el test de A-D rechaza la hipótesis nula de normalidad en los residuos.
+
+```{r tresidmodel1, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Gráficos residuales para variables del modelo 1.', echo=FALSE, warning=FALSE}
+residualPlots(model1, fitted=FALSE) #linealidad
+```
+
+Las variables `waterfront` y
+
+```{r, echo=FALSE, warning=FALSE}
+#normalidad
+rmodel1 <- rstandard(model1) #normalidad con residuales estandarizados
+kurtosis(model1$residuals)
+skewness(model1$residuals)
+kurtosis(rmodel1)  #aun asi con los residuos estandarizados la kurtosis y el grado
+#de simetria se salen por fuera de los valores normales
+skewness(rmodel1)
+ad.test(rmodel1) #se rechaza la hipótesis nula de que los residuos están normalmente distribuidos
+ncvTest(model1)  #Homogeneidad de varianzas: se rechaza la hipótesis de varianza constante
+#por lo que hay evidencia de heterocedasticidad en los errores del modelo imcumpliendo 
+#el supuesto de homgeneidad de las varianzas de los errores
+dwtest(model1) # Autocorrelación de errores: se detecta
+outlierTest(model1) #los outliers del modelo
+```
+
+```{r, fig.align = "center", fig.width= 8, fig.height=8, echo=FALSE, warning=FALSE}
+#Valores influyentes
+par(mfrow = c(1, 1))
+influencePlot(model1)
+```
+
+<!-- Así, vemos que, según el modelo, una casa con 3 cuartos, 1 baño, 1 piso, 1180 pies cuadrados de espacio habitable y construida en el año 1955, costaría en promedio unos 208877.9 dólares. Con los valores reales, costaría unos 221900 dólares.  -->
+
+<!-- Graficamos la relación entre los valores de los precios reales de las casas y los valores predichos por el modelo. -->
+
+<!-- ```{r, plot} -->
+
+<!-- plot(x = df$price,                          # True values on x-axis -->
+
+<!--      y = model1$valor.lm,               # fitted values on y-axis -->
+
+<!--      xlab = "Valores verdaderos", -->
+
+<!--      ylab = "Valores ajustados por el modelo", -->
+
+<!--      main = "Ajuste de regresión de los valores del modelo") -->
+
+<!-- abline(b = 1, a = 0)     -->
+
+<!-- ``` -->
+
+### Modelo 2
+
+Ahora estimaremos un modelo quitando variables de año, variables de identificación de año (excepto la del año en que se construyó la casa, ya que considerar esta variable nos indicará la relación a la que han crecido los precios conforme pasaron los años con el supuesto que el crecimiento de los precios fue constante a través de los años) y variables altamente correlacionadas como `sqft_basement`.
+
+```{r, echo = TRUE, warning=FALSE, message=FALSE}
+model2 <- lm(price ~ . -date -id -yr_renovated -zipcode -sqft_basement, data = df)
+summary(model2)
+```
+
+Vemos que hay coeficientes que no se pueden estimar debido a un alto grado de multicolinealidad entre esas variables.
+Identificamos que hay una alta correlación de la variable `sqft_basement`con las variables `sqft_living` y `sqft_above`.
+
+```{r, echo = TRUE, warning=FALSE, message=FALSE}
+vif(model2)
+alias(lm(price ~ . -date -id, data = df) )
+```
+
+Obtenemos el coeficiente de determinación y el error estándar residual para el modelo 2:
+
+```{r model2coef, echo = FALSE, warning=FALSE, message=FALSE}
+cat(" R squared =", summary(model2)$r.squared, "\n",
+    "Residual standard error =", summary(model2)$sigma)
+```
+
+Inspeccionamos los residuos del modelo 2.
+Encontramos que, a pesar de quitar variables que consideramos que no son relevantes al modelo, los residuos siguen un patrón similar al del modelo 1.
+
+#### Análisis de residuales del modelo 2
+
+```{r residmodel2, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Gráficos residuales para el modelo 2', echo=FALSE, warning=FALSE}
+# Residual diagnostics for Model 2
+par(mfrow=c(2,2))
+plot(model2)
+par(mfrow=c(1,1))
+```
+
+Obtenemos casi los mismos resultados en los residuos como en el modelo 1.
+
+```{r, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Gráficos residuales para variables del modelo 2.', echo=FALSE, warning=FALSE}
+residualPlots(model2) #linealidad
+```
+
+```{r, echo=FALSE, warning=FALSE}
+#normalidad
+rmodel2 <- rstandard(model2) #normalidad con residuales estandarizados
+kurtosis(model2$residuals)
+skewness(model2$residuals)
+kurtosis(rmodel2)  #aun asi con los residuos estandarizados la kurtosis y el grado
+#de simetria se salen por fuera de los valores normales
+skewness(rmodel2)
+ad.test(rmodel2) #se rechaza la hipótesis nula de que los residuos están normalmente distribuidos
+ncvTest(model2)  #Homogeneidad de varianzas: se rechaza la hipótesis de varianza constante
+#por lo que hay evidencia de heterocedasticidad en los errores del modelo imcumpliendo 
+#el supuesto de homgeneidad de las varianzas de los errores
+dwtest(model2) # Autocorrelación de errores: se detecta
+outlierTest(model2) #los outliers del modelo
+```
+
+```{r, fig.align = "center", fig.width= 8, fig.height=8, echo=FALSE, warning=FALSE}
+#Valores influyentes
+par(mfrow = c(1, 1))
+influencePlot(model2)
+```
+
+## Variables predictivas redundantes
+
+Ahora eliminaremos las variables que consideremos redundantes a través de inspeccionar el nivel de correlación entre las variables predictoras y eliminar estas para proceder a estimar el modelo usando mínimos cuadrados.
+Posteriormente, compararemos este modelo con el modelo anterior a fin de quedarnos con el modelo más parsimonioso y que ayude a explicar mejor el conjunto de datos.
+
+<!-- ##### Dataset  -->
+
+<!-- ```{r} -->
+
+<!-- head(df) -->
+
+<!-- attach(df) -->
+
+<!-- ``` -->
+
+### Excluyendo la variable dependiente y solo considerando las variables predictoras cuantitativas para encontrar variables redundantes
+
+Computamos un gráfico de correlación entre las variables consideradas usando la libreria `ggcorrplot`:
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE, results ='hide'}
+library(dplyr)
+df
+df.pred <- select(df, - price, -date, -id, -yr_renovated, -zipcode, -sqft_basement)
+correlationMatrix <- cor(df.pred)
+correlationMatrix
+```
+
+```{r, fig.height=8 , fig.width= 8, fig.align='center'}
+library(ggcorrplot)
+#windows()
+correlationMatrix <- round(cor(df.pred), 2)
+ggcorrplot(correlationMatrix, type = "upper", lab = TRUE, lab_size = 2)
+```
+
+Vemos que la variable que tiene un mayor grado de correlación con las otras variables y que potencialmente pudiera estar afectando el modelo de datos introduciendo una fuente de multicolinealidad importante con otras variables es la variable `sqft_above`.
+ 
+
+```{r, include = TRUE, warning = FALSE, message = FALSE}
+library(caret)
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff = 0.8)
+#highlyCorrelated
+names(df.pred)[highlyCorrelated]
+```
+
+### Modelo 3
+
+Quitamos la variable y estimamos el nuevo modelo sin la variable redundante:  
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+model3 <- lm(price ~ . -date -id -yr_renovated -zipcode 
+             -sqft_basement -sqft_above, data = df)
+summary(model3)
+```
+
+  Obtenemos el coeficiente de determinación y el error estándar residual para el modelo 3:
+
+```{r model3coef, echo = FALSE, warning=FALSE, message=FALSE}
+cat(" R squared =", summary(model3)$r.squared, "\n",
+    "Residual standard error =", summary(model3)$sigma)
+```
+
+#### Análisis de residuales del modelo 3
+
+Inspeccionamos los residuos del modelo 3.
+Encontramos que aún habiendo quitado la variable que tiene un mayor grado de correlación con las demás (`sqft_above`), aún no se ha logrado eliminar los problemas del modelo, entre ellos una fuente de heterocedasticidad en el modelo, es decir que la varianza de los errores, no es constante a lo largo de las observaciones.
+
+```{r residmodel3, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Residual plots for Model 3.', echo=FALSE, warning=FALSE}
+# Residual diagnostics for Model 3
+par(mfrow=c(2,2))
+plot(model3)
+par(mfrow=c(1,1))
+```
+
+Evaluando los residuos del modelo 3, estos no se ajustan a los supuestos de normalidad.
+
+```{r, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Gráficos residuales para variables del modelo 3.', echo=FALSE, warning=FALSE}
+residualPlots(model3) #linealidad
+```
+
+```{r, echo=FALSE, warning=FALSE}
+#normalidad
+rmodel3 <- rstandard(model3) #normalidad con residuales estandarizados
+kurtosis(model3$residuals)
+skewness(model3$residuals)
+kurtosis(rmodel3)  #aun asi con los residuos estandarizados la kurtosis y el grado
+#de simetria se salen por fuera de los valores normales
+skewness(rmodel3)
+ad.test(rmodel3) #se rechaza la hipótesis nula de que los residuos están normalmente distribuidos
+ncvTest(model3)  #Homogeneidad de varianzas: se rechaza la hipótesis de varianza constante
+#por lo que hay evidencia de heterocedasticidad en los errores del modelo imcumpliendo 
+#el supuesto de homgeneidad de las varianzas de los errores
+dwtest(model3) # Autocorrelación de errores: se detecta
+outlierTest(model3) #los outliers del modelo
+```
+
+```{r, fig.align = "center", fig.width= 8, fig.height=8, echo=FALSE, warning=FALSE}
+#Valores influyentes
+par(mfrow = c(1, 1))
+influencePlot(model3)
+```
+
+## Transformación de variables
+
+Es posible que las variables que estamos llevando al modelo no estén siendo bien tratadas debido a que tienen una distribución que se aleje de la normal, la cual es requisito esencial para la ejecución del modelo de regresión lineal, en tanto este considera dentro de sus supuestos que las variables deban seguir una distribución normal.
+Podemos corroborar que variables como `lat`, `long`.
+`bedrooms`, `bathrooms`, entre otras no siguen una distribución normal.
+
+<!-- Es posible que no estemos considerando la importancia de la variable tiempo (`date`) en el incremento de los precios (esto por motivos inflacionarios así como por revalorización de los inmuebles a través de los años). Así, regresionamos los precios coontra la variable `yr_built` para poder usarla como una serie de tiempo y ver si hay una relación lineal a través del tiempo. -->
+
+<!-- # ```{r} -->
+
+<!-- # #df$date <- paste(substr(df$date, 1,6), "01", sep = "") -->
+
+<!-- # #library(lubridate) -->
+
+<!-- # #df$date <- format(df$date, format="%Y") -->
+
+<!-- # #df$date <- y(df$date) -->
+
+<!-- # ``` -->
+
+<!-- ```{r} -->
+
+<!-- model4 <- lm(price ~ yr_built, data = df) -->
+
+<!-- summary(model4) -->
+
+<!-- plot(df$yr_built, df$price) -->
+
+<!-- ``` -->
+
+### Modelo 4
+
+Transformamos las variables para suavizar las mismas.
+Ahora la variable dependiente será el logaritmo natural de `price` y procederemos a probar los resultados.
+Adicional a ello, centramos la variable año.
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+df <- df %>% 
+  mutate(yr_built_center = yr_built - 1900)
+model4 <-lm(log(price)~ sqft_living + . - yr_built    -date -id -yr_renovated -zipcode 
+             -sqft_basement -sqft_above,data=df)
+summary(model4)
+```
+
+#### Análisis de residuales del modelo 4
+
+Si bien al transformar la variable dependiente utilizando un logaritmo, vemos que aún no se corrigen los problemas en la normalidad de las variables, ya que podemos ver que los valores extremos siguen afectando el modelo, dejándonos con residuos estimados que no parecen siguen un patrón aleatorio.
+
+```{r residmodel4, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Residual plots for Model 4.', echo=FALSE, warning=FALSE}
+# Residual diagnostics for Model 4
+par(mfrow=c(2,2))
+plot(model4)
+par(mfrow=c(1,1))
+```
+
+Evaluando el modelo 4, vemos que tanto la curtosis se acerca de mejor manera que los modelos anteriores al valor esperado de 3 y también el grado de asimetría se acerca al cero.
+Sin embargo, aún se rechaza la hipótesis de normalidad en el test de Anderson-Darling.
+Es decir, aún la distribución no sigue la normalidad.
+
+```{r, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Gráficos residuales para variables del modelo 2.', echo=FALSE, warning=FALSE}
+residualPlots(model4) #linealidad
+```
+
+```{r, echo=FALSE, warning=FALSE}
+#normalidad
+rmodel4 <- rstandard(model4) #normalidad con residuales estandarizados
+kurtosis(model4$residuals)
+skewness(model4$residuals)
+kurtosis(rmodel4)  #aun asi con los residuos estandarizados la kurtosis y el grado
+#de simetria se salen por fuera de los valores normales
+skewness(rmodel4)
+ad.test(rmodel4) #se rechaza la hipótesis nula de que los residuos están normalmente distribuidos
+ncvTest(model4)  #Homogeneidad de varianzas: se rechaza la hipótesis de varianza constante
+#por lo que hay evidencia de heterocedasticidad en los errores del modelo imcumpliendo 
+#el supuesto de homgeneidad de las varianzas de los errores
+dwtest(model4) # Autocorrelación de errores: se detecta
+outlierTest(model4) #los outliers del modelo
+```
+
+```{r, fig.align = "center", fig.width= 8, fig.height=8, echo=FALSE, warning=FALSE}
+#Valores influyentes
+par(mfrow = c(1, 1))
+influencePlot(model4)
+```
+
+### Modelo 5
+
+Ahora colocamos logaritmos en algunas variables predictoras como `sqft_living`.
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+model5 <-lm(log(price)~ log(sqft_living) + . - yr_built    -date -id -yr_renovated -zipcode 
+             -sqft_basement -sqft_above,data=df)
+summary(model5)
+```
+
+#### Análisis de residuales del modelo 5
+
+En el análisis de residuos, notamos una mejora en el ajuste lineal del modelo al graficar los residuos contra los valores predichos, aunque seguimos viendo patrones irregulares en la normalidad de los residuos.
+
+```{r residmodel5, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Residual plots for Model 5.', echo=FALSE, warning=FALSE}
+# Residual diagnostics for Model 5
+par(mfrow=c(2,2))
+plot(model5)
+par(mfrow=c(1,1))
+```
+
+Seguimos con los mismos resultados del modelo 5, en el que se sigue rechazando el test de A-D, pero las curtosis y la simetría de los residuos se acercan al de una distribución normal.
+
+```{r, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Gráficos residuales para variables del modelo 5.', echo=FALSE, warning=FALSE}
+residualPlots(model5) #linealidad
+```
+
+```{r, echo=FALSE, warning=FALSE}
+#normalidad
+rmodel5 <- rstandard(model5) #normalidad con residuales estandarizados
+kurtosis(model5$residuals)
+skewness(model5$residuals)
+kurtosis(rmodel5)  #aun asi con los residuos estandarizados la kurtosis y el grado
+#de simetria se salen por fuera de los valores normales
+skewness(rmodel5)
+ad.test(rmodel5) #se rechaza la hipótesis nula de que los residuos están normalmente distribuidos
+ncvTest(model5)  #Homogeneidad de varianzas: se rechaza la hipótesis de varianza constante
+#por lo que hay evidencia de heterocedasticidad en los errores del modelo imcumpliendo 
+#el supuesto de homgeneidad de las varianzas de los errores
+dwtest(model5) # Autocorrelación de errores: se detecta
+outlierTest(model5) #los outliers del modelo
+```
+
+```{r, fig.align = "center", fig.width= 8, fig.height=8, echo=FALSE, warning=FALSE}
+#Valores influyentes
+par(mfrow = c(1, 1))
+influencePlot(model5)
+```
+
+### Modelo 6
+
+Ahora colocamos logaritmos tanto en `sqft_living` y en `sqft_lot`
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+model6 <-lm(log(price)~ log(sqft_living) + log(sqft_lot)+. - yr_built    -date -id -yr_renovated -zipcode 
+             -sqft_basement -sqft_above,data=df)
+summary(model6)
+```
+
+En el análisis de residuos, aún notamos el patrón de residuos del modelo 5.
+
+```{r residmodel6, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Residual plots for Model 6.', echo=FALSE, warning=FALSE, message=FALSE}
+# Residual diagnostics for Model 6
+par(mfrow=c(2,2))
+plot(model6)
+par(mfrow=c(1,1))
+```
+
+Se sigue rechazando el test de A-D, y vemos que aumentó el coeficiente de determinación; sin embargo, la curtosis y la simetría de los residuos se alejan más que los obtenidos en el modelo anterior.
+
+```{r tresidmodel6}
+library(nortest)
+library(moments)
+ad.test(model6$residuals)
+kurtosis(model6$residuals)
+skewness(model6$residuals)
+```
+
+<!-- # ```{r} -->
+
+<!-- # install.packages("tidyverse") -->
+
+<!-- # library(tidyverse) -->
+
+<!-- # modelfitci <- model6 %>%  -->
+
+<!-- #   tidy() %>%  -->
+
+<!-- #   select(term, estimate, std.error) -->
+
+<!-- # modelfitci -->
+
+<!-- #  -->
+
+<!-- # confidence_interval_offset <- 1.95 * modelfitci$std.error[2] -->
+
+<!-- # confidence_interval <- round(c(modelfitci$estimate[2] - confidence_interval_offset, -->
+
+<!-- #                                modelfitci$estimate[2], -->
+
+<!-- #                                modelfitci$estimate[2] + confidence_interval_offset), 4) -->
+
+<!-- # confidence_interval -->
+
+<!-- # ``` -->
+
+## Añadiendo un término de interacción
+
+### Modelo 7
+
+Añadimos la interacción entre la variable `bathrooms` y el logaritmo de `sqft_living`.
+Notamos una gran mejora en el coeficiente de determinación ajustado (=77.1%).
+Es decir el modelo explica el 77.1% de la variabilidad de la variable dependiente.
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+model7 <-lm(log(price)~log(sqft_living) + log(sqft_lot)+log(sqft_living15) + bedrooms+bathrooms + grade + condition+ waterfront+yr_built_center+lat - yr_built +yr_renovated+view+floors + (bathrooms*log(sqft_living)),data=df)
+summary(model7)
+```
+
+Notamos una gran mejora a la hora de analizar los residuos.
+Sigue notándose el patrón aleatorio de los residuos contra los valores ajutados.
+La normalidad en el gráfico QQ domina a lo largo del gráfico, salvo en los extremos, lo que podría indicar que hay algunos valores extremos que siguen afectando en menor proproción la linealidad del modelo.
+Asimismo, analizando el gráfico *residuals vs leverage* observamos que los residuos se aglomeran en la izquierda sin salirde del límite dado por la distanciade Cook.
+Sin embargo, se puede identificar las observaciones 4025, 12778, y 15781 como los valores extremos, conocidos como *outliers*, que pueden afectar aún a los resultados del modelo.
+Sin embargo, quitando estas observaciones, se puede aún mejorar el modelo.
+Como se ha visto, realizando los ajustes y transformaciones necesarias, se puede llegar a un modelo que sea lo suficientemente complejo y a la vez parsimonioso para explicar los datos y las asociaciones entre ellos.
+
+```{r residmodel7, fig.align = "center", fig.width= 8, fig.height=8, fig.cap = 'Residual plots for Model 7.', echo=FALSE, warning=FALSE, message=FALSE}
+# Residual diagnostics for Model 7
+par(mfrow=c(2,2))
+plot(model7)
+par(mfrow=c(1,1))
+```
+
+Se sigue rechazando el test de A-D, y vemos que aumentó el coeficiente de determinación; sin embargo, la curtosis y la simetría de los residuos se acermás que los obtenidos en el modelo 6.
+
+```{r tresidmodel7}
+library(nortest)
+library(moments)
+ad.test(model7$residuals)
+kurtosis(model7$residuals)
+skewness(model7$residuals)
+```
+
+Dado que ya tenemos una idea de cómo se comportan los residuos, podemos hacer una inspección más detallada con el modelo que creemos que mejor nos ha dado resultado hasta el momento medido con el coeficiente de determinación en tanto que buscamos un mejor ajuste para el modelo.
+Es decir el modelo 6 y ver específicamente si hay outliers y observaciones influyentes que pudieran estar afectando la distribución de los residuales.
+Así, obtenemos un conjunto de resultados que nos indican que hay observaciones que sí influyen, posteriormente en los resultados del modelo.
+Queda en agenda realizar modificaciones para obtener un mejor modelo.
+
+```{r, fig.align='center', echo=FALSE, message=FALSE, warning=FALSE}
+### Linealidad
+library(alr4)
+residualPlots(model7)
+
+### Normalidad
+library(nortest)
+ad.test(model7)
+
+### Homogeneidad de varianzas
+ncvTest(model7)
+
+### Autocorrelación de errores
+library(lmtest)
+dwtest(model7)
+
+#####################################
+######## Valores influyentes ########
+#####################################
+
+par(mfrow = c(1, 1))
+influencePlot(model7)
+
+#####################################
+############# Outliers ##############
+#####################################
+
+outlierTest(model7)
+```
+
+```{r tresidmodel7_part2, fig.align='center'}
+library(nortest)
+library(moments)
+library(olsrr)
+
+ad.test(model7$residuals)
+kurtosis(model7$residuals)
+skewness(model7$residuals)
+
+par(mfrow=c(3,1))
+windows()
+layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE))
+ols_plot_resid_qq(model7)
+ols_plot_resid_fit(model7)
+ols_plot_resid_hist(model7)
+ols_plot_dfbetas(model7)
+ols_plot_cooksd_bar(model7)
+ols_plot_cooksd_chart(model7)
+```
+
+## Comparación de modelos
+
+Ahora comparemos los últimos 3 modelos y evaluemos el nivel de parsimoniedad entre ellos.
+Es decir, un modelo que cuyo nivel de complejidad sea lo minimamente necesario para describir el conjunto de datos.
+En este caso, utilizaremos la función `anova` para comparar los dos modelos y elegir al que provee el mejor ajuste y a la vez que sea el modelo más parsimonioso para describir y modelar el conjunto de datos.
+
+### Modelo 5 vs Modelo 6
+
+ 
+
+```{r comp1, echo=TRUE}
+anova(model5, model6)
+```
+
+Como primer argumento, ponemos al modelo menos complejo.
+El output del análisis anova nos indica que el segundo modelo contiene una variable extra y tiene un p-value menor a 0.05, indicando que ajusta mejor a los datos para predecir el valor del precio que el modelo 5.
+
+Ahora comparamos los modelos 6 y 7.
+
+### Modelo 6 vs Modelo 7
+
+ 
+
+```{r comp2, echo=TRUE}
+anova(model7, model6)
+```
+
+El output del análisis anova ahora nos indica que el modelo 6 performa mejor, a pesar que tiene dos variables extras, es decir es más complejo.
+Sin embargo, en el análisis de comparación, se muestra que tiene un mejor ajuste que el último modelo que tiene incorporada una variable de interacción.
+Así, preferimos el modelo 6 hasta el momento.
+Como agenda, queda retirar variables outliers e incorporar interacciones para ver si mejora el modelo.
+
+```{r modelcompgen, echo = FALSE, warning=FALSE, message=FALSE}
+cat(" R Adj-squared =", summary(model1)$adj.r.squared , "\n",
+    "Residual standard error =", summary(model1)$sigma)
+
+cat(" R Adj-squared =", summary(model2)$adj.r.squared , "\n",
+    "Residual standard error =", summary(model2)$sigma)
+
+cat(" R Adj-squared =", summary(model3)$adj.r.squared , "\n",
+    "Residual standard error =", summary(model3)$sigma)
+
+cat(" R Adj-squared =", summary(model4)$adj.r.squared , "\n",
+    "Residual standard error =", summary(model4)$sigma)
+
+cat(" R Adj-squared =", summary(model5)$adj.r.squared , "\n",
+    "Residual standard error =", summary(model5)$sigma)
+
+cat(" R Adj-squared =", summary(model6)$adj.r.squared , "\n",
+    "Residual standard error =", summary(model6)$sigma)
+
+cat(" R Adj-squared =", summary(model7)$adj.r.squared , "\n",
+    "Residual standard error =", summary(model7)$sigma)
+```
+
+## Selección de modelos usando los métodos Best Subset Selection, Forward Stepwise Selection y Backward Stepwise Selection
+
+```{r, include=FALSE}
+#Cargamos las librerías a usar
+library(leaps)
+library(caret) #libreria para modelos predictivos
+```
+
+### BEST SUBSET SELECTION
+
+```{r, echo=TRUE}
+dfbest <- df[,3:21]
+df.bss <- regsubsets(price ~ ., data = dfbest, nvmax = 18,
+                          method = "exhaustive") #le pongo 18 por el número de variables predictoras
+bss <- summary(df.bss)
+bss
+```
+
+#### Cp de Mallows
+El Cp de Mallows nos indica que el mejor modelo contiene 17 variables predictoras
+```{r}
+windows()
+par(mfrow=c(1,1))
+plot(bss$cp, xlab = "Número de variables predictoras", ylab = "Cp",
+     type = 'p')
+which.min(bss$cp)
+points(17, bss$cp[17], col = "red", cex = 2, pch = 20) #cex y pch son parametros para la forma del marcador
+```
+
+#### BIC
+El criterio BIC nos indica que el mejor modelo contiene 15 variables predictoras BIC
+```{r, message=FALSE, warning=FALSE, fig.align='center'}
+plot(bss$bic, xlab = "Número de variables predictoras", ylab = "BIC",
+     type = 'p')
+which.min(bss$bic)
+points(15, bss$bic[15], col = "blue", cex = 2, pch = 20)
+```
+
+#### R2 Ajustado
+El R2 ajustado nos indica que el mejor modelo contiene 17 variables predictoras
+```{r, message=FALSE, warning=FALSE, fig.align='center'}
+plot(bss$adjr2, xlab = "Número de variables predictoras", ylab = "R2 ajustado",
+     type = "p")
+which.max(bss$adjr2)
+points(17, bss$adjr2[17], col = "green", cex = 2, pch = 20)
+```
+
+```{r}
+coef(df.bss, 17)
+coef(df.bss, 15)
+coef(df.bss, 17)
+```
+
+Luego vamos al proceso de *validación cruzada 10* que nos indicará la performance de los modelos y posteriormente calculará las siguientes métricas de desempeño (`$R^2$`, `RMSE`, `MAE`) en cada uno de ellos.
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+RNGkind(sample.kind = "Rejection") #define el mismo metodo de rejection como el generador
+# de numeros pseudoaleatorios que permitira realizar el proceso de particion aleatorio del conjunto de datos
+# siempre va la linea 49
+train.cont <- trainControl(method = "cv", number = 10) #metodo de cross validation 10
+```
+
+#### Modelo con 17 variables predictoras
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(3018) # Valor semilla
+m1bss_17 <- train(price ~ bedrooms + bathrooms + sqft_living + sqft_lot + floors + waterfront + view + condition + grade + sqft_above + yr_renovated + zipcode + lat + long + sqft_living15 + sqft_lot15+ sqft_basement, data = dfbest, method = "lm",
+             trControl = train.cont)
+m1bss_17
+```
+
+#### Modelo con 15 variables predictoras
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(9125) # Valor semilla
+m2bss_15 <- train(price ~ bedrooms + bathrooms + sqft_living + waterfront + view + condition + grade + sqft_above + yr_renovated + zipcode + lat + long + sqft_living15 + sqft_lot15 + sqft_basement, data = dfbest, method = "lm", trControl = train.cont)
+m2bss_15
+```
+
+Ya que tanto el modelo 1 y 3 utilizan las mismas variables, nos quedamos con el primero y lo compararemos con el segundo.
+
+Comparamos las diferentes métricas de los modelos realizados:
+El modelo con 15 variables presenta un menor RSME, mayor R cuadrado y un menor MAE a diferencia del modelo con 17 variables predictoras. En este caso, nos quedaríamos con el modelo de 15 variables.
+
+```{r}
+m1bss_17$results
+m2bss_15$results
+```
+
+### FORWARD STEPWISE SELECTION
+
+```{r, message=FALSE, warning=FALSE}
+df.fwss <- regsubsets(price ~ ., data = dfbest, nvmax = 18,
+                          method = "forward")
+fwss <- summary(df.fwss)
+fwss
+```
+
+#### Cp de Mallows
+```{r, fig.align='center', message=FALSE, warning=FALSE}
+windows()
+plot(fwss$cp, xlab = "Número de variables predictoras", ylab = "Cp",
+     type = 'p')
+which.min(fwss$cp)
+points(17, fwss$cp[17], col = "black", cex = 2, pch = 20) #cex y pch son parametros para la forma del marcador
+```
+
+#### BIC
+```{r, message=FALSE, warning=FALSE, fig.align='center'}
+plot(fwss$bic, xlab = "Número de variables predictoras", ylab = "BIC",
+     type = 'p')
+which.min(fwss$bic)
+points(15, fwss$bic[15], col = "blue", cex = 2, pch = 20)
+```
+
+#### R2 ajustado
+```{r, message=FALSE, warning=FALSE, fig.align='center'}
+plot(fwss$adjr2, xlab = "Número de variables predictoras", ylab = "R2 ajustado",
+     type = "p")
+which.max(fwss$adjr2)
+points(17, fwss$adjr2[17], col = "green", cex = 2, pch = 20)
+```
+
+```{r}
+coef(df.fwss, 17) 
+coef(df.fwss, 15) 
+coef(df.fwss, 17)
+```
+
+Luego vamos al proceso de *validación cruzada 10* que nos indicará la performance de los modelos y posteriormente calculará las siguientes métricas de desempeño (`$R^2$`, `RMSE`, `MAE`) en cada uno de ellos.
+```{r, include=FALSE}
+train.cont <- trainControl(method = "cv", number = 10)
+```
+
+#### Modelo con 17 variables predictoras
+```{r, message=FALSE, warning=FALSE}
+set.seed(6713) # Valor semilla
+m1fwss_17 <- train(price ~ bedrooms + bathrooms + sqft_living + sqft_lot + floors + waterfront + view + condition + grade + yr_built + yr_renovated + zipcode + lat + long + sqft_living15 + sqft_lot15 + sqft_basement, data = dfbest, method = "lm", trControl = train.cont)
+m1fwss_17
+```
+
+#### Modelo con 15 variables predictoras
+```{r, message=FALSE, warning=FALSE}
+set.seed(4681) # Valor semilla
+m2fwss_15 <- train(price ~ bedrooms + bathrooms + sqft_living + waterfront + view + condition + grade + yr_built+ yr_renovated+ zipcode + lat + long + sqft_living15 + sqft_lot15 + sqft_basement , data = dfbest, method = "lm", trControl = train.cont) 
+m2fwss_15
+```
+
+Comparamos las diferentes métricas de los modelos realizados. El modelo con 17 variables predictoras presenta un menor RSME y MAE, así como un mayor R cuadrado. Es decir presenta unas mejores métricas que el modelo con 15 variables predictoras. Por ello, nos quedamos con el primer modelo.
+```{r}
+m1fwss_17$results
+m2fwss_15$results 
+```
+
+### BACKWARD STEPWISE SELECTION
+```{r, message=FALSE, warning=FALSE, echo=TRUE}
+df.bwss <- regsubsets(price ~ ., data = dfbest, nvmax = 18,
+                          method = "backward")
+bwss <- summary(df.bwss)
+bwss
+```
+
+### Cp de Mallows
+```{r, message=FALSE, warning=FALSE, fig.align='center'}
+windows()
+plot(bwss$cp, xlab = "Número de variables predictoras", ylab = "Cp",
+     type = 'p')
+which.min(bwss$cp)
+points(17, bwss$cp[17], col = "black", cex = 2, pch = 20) #cex y pch son parametros para la forma del marcador
+```
+
+### BIC
+```{r, message=FALSE, warning=FALSE, fig.align='center'}
+plot(bwss$bic, xlab = "Número de variables predictoras", ylab = "BIC",
+     type = 'p')
+which.min(bwss$bic)
+points(15, bwss$bic[15], col = "blue", cex = 2, pch = 20)
+```
+
+### R2 ajustado
+```{r, message=FALSE, warning=FALSE, fig.align='center'}
+plot(bwss$adjr2, xlab = "Número de variables predictoras", ylab = "R2 ajustado",
+     type = "p")
+which.max(bwss$adjr2)
+points(17, bwss$adjr2[17], col = "green", cex = 2, pch = 20)
+```
+
+Vemos cuáles son los coeficientes seleccionados por los criterios:
+```{r, message=FALSE, warning=FALSE}
+coef(df.bwss, 17)
+coef(df.bwss, 15)
+coef(df.bwss, 17)
+```
+
+Luego vamos al proceso de *validación cruzada 10* que nos indicará la performance de los modelos y posteriormente calculará las siguientes métricas de desempeño (R-cuadrado, RMSE y MAE) en cada uno de ellos.
+```{r, include=FALSE, message=FALSE, warning=FALSE}
+train.cont <- trainControl(method = "cv", number = 10)
+```
+
+#### Modelo con 17 variables predictoras
+```{r,message=FALSE, warning=FALSE}
+set.seed(6381) # Valor semilla
+m1bwss_17 <- train(price ~ bedrooms + bathrooms + sqft_living + sqft_lot + floors + waterfront + view + condition + grade + sqft_above + yr_renovated + zipcode+ lat + long + sqft_living15 + sqft_lot15 + sqft_basement, data = dfbest, method = "lm", trControl = train.cont)
+m1bwss_17
+```
+
+#### Modelo con 15 variables predictoras
+```{r, message=FALSE, warning=FALSE}
+set.seed(9284) # Valor semilla
+m2bwss_15 <- train(price ~ bedrooms + bathrooms + sqft_living + waterfront + view + condition + grade + sqft_above + yr_renovated + zipcode+ lat + long + sqft_living15 + sqft_lot15 + sqft_basement, data = dfbest, method = "lm", trControl = train.cont)
+m2bwss_15
+```
+
+En este caso, el modelo con 17 variables tiene un menor RSME, pero el modelo con 15 variables presenta un mayor R cuadrado, así como un menor MAE. Por lo tanto nos quedamos con el modelo de 15 variables al realizar el Backward Stepwise Selection.
+```{r}
+m1bwss_17$results
+m2bwss_15$results
+```
+
+### Mejor modelo de los tres métodos de selección
+En este caso, comparando los tres métodos de selección, el modelo que tiene mejor perfomance es el que fue seleccionado con el algoritmo *Forward Step Selection*, ya que tiene un menor RMSE, un menor MAE y posee a la vez un mayor R cuadrado. Este lo guardaremos para compararlo con el modelo que se obtiene de la regresión Lasso.
+```{r}
+m2bss_15$results
+m1fwss_17$results
+m2bwss_15$results
+```
+
+
+## MODELOS DE REGRESIÓN PENALIZADA: REGRESSIÓN RIDGE Y LASSO
+
+```{r}
+dfset <- df[,3:21]
+x <- model.matrix(price ~ ., dfset)[ , -1]
+y <- dfset$price
+```
+
+### Regresión ridge 
+```{r}
+library(glmnet)
+dfset.ridge <- glmnet(x, y, alpha = 0)
+attributes(dfset.ridge)
+```
+
+#### Valores de lambda usados para obtener diferentes modelos de regresión ridge
+```{r}
+dfset.ridge$lambda
+```
+
+#### Coeficientes estimados de los diferentes modelos de regresión ridge
+```{r}
+dfset.ridge$beta
+```
+
+#### Interceptos
+```{r}
+dfset.ridge$a0
+```
+
+#### Valor de lambda en el modelo 20
+```{r}
+dfset.ridge$lambda[20]
+```
+
+#### Coeficientes estimados obtenidos con el valor de lambda en el modelo 20
+```{r}
+dfset.ridge$beta[ , 20]
+dfset.ridge$a0[20]
+coef(dfset.ridge)[ , 20]
+```
+
+#### Traza ridge
+```{r}
+windows()
+plot(dfset.ridge, xvar = "lambda")
+par(cex = 0.75)
+legend("topright", legend = colnames(x), lty = c(1, 1), col = 1:8)
+```
+
+#### Para hallar el valor óptimo de lambda se usa validación cruzada
+```{r}
+set.seed(3018)
+cv.out.ridge <- cv.glmnet(x, y, alpha = 0)
+best.lambda.ridge <- cv.out.ridge$lambda.min
+best.lambda.ridge
+```
+
+```{r}
+plot(cv.out.ridge)
+```
+
+
+#### El modelo de regresión ridge final usando el valor óptimo de lambda
+```{r}
+dfset.ridge.best <- glmnet(x, y, alpha = 0, lambda = best.lambda.ridge)
+coef(dfset.ridge.best)
+print(coef(dfset.ridge.best),digits=22) 
+
+```
+
+#### Evaluamos la precisión
+```{r}
+
+pred.ridge <- predict(cv.out.ridge, newx = x, s="lambda.min")
+
+head(pred.ridge)
+
+```
+
+```{r}
+install.packages("DMwR")
+library(DMwR)
+
+round(regr.eval(y, pred.ridge), 3)
+```
+
+
+### Regresión lasso
+```{r}
+dfset.lasso <- glmnet(x, y, alpha = 1)
+```
+
+#### Valores de lambda usados para obtener diferentes modelos de regresión lasso
+```{r}
+dfset.lasso$lambda
+```
+
+#### Coeficientes estimados de los diferentes modelos de regresión lasso
+```{r, include=FALSE}
+dfset.lasso$beta
+```
+
+#### Interceptos
+```{r}
+dfset.lasso$a0
+```
+
+#### Valor de lambda en el modelo 20
+```{r}
+dfset.lasso$lambda[20]
+```
+
+#### Coeficientes estimados obtenidos con el valor de lambda en el modelo 20
+```{r}
+dfset.lasso$beta[ , 20]
+dfset.lasso$a0[20]
+coef(dfset.lasso)[ , 20]
+```
+
+#### Traza lasso
+```{r}
+plot(dfset.lasso, xvar = "lambda")
+par(cex = 0.75)
+legend("topright", legend = colnames(x), lty = c(1, 1), col = 1:8)
+```
+
+#### Para hallar el valor óptimo de lambda se usa validación cruzada
+```{r}
+set.seed(9125)
+cv.out.lasso <- cv.glmnet(x, y, alpha = 1)
+best.lambda.lasso <- cv.out.lasso$lambda.min
+best.lambda.lasso
+```
+
+```{r}
+plot(cv.out.lasso)
+```
+
+#### El modelo de regresión lasso final usando el valor óptimo de lambda
+```{r}
+dfset.lasso.best <- glmnet(x, y, alpha = 1, lambda = best.lambda.lasso)
+coef(dfset.lasso.best)
+```
+
+```{r, include=FALSE}
+attributes(dfset.lasso.best)
+attributes(dfset.lasso)
+```
+
+
+#### Comparación de modelos
+
+```{r, echo=TRUE}
+anova(m1fwss_17,dfset.ridge.best)
+```
+
+
+```{r, echo=TRUE}
+m1fwss_17$results
+```
+
+```{r, echo=TRUE}
+assess.glmnet(dfset.ridge.best,           #in this case, we are evaluating the model
+              newx = x,              #in the same data used to fit the model
+              newy = y )  
+```
+
+```{r, echo=TRUE}
+assess.glmnet(dfset.lasso.best,           #in this case, we are evaluating the model
+              newx = x,              #in the same data used to fit the model
+              newy = y )  
+```
